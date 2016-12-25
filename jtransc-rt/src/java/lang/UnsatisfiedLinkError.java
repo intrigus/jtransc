@@ -16,6 +16,9 @@
 
 package java.lang;
 
+import com.jtransc.annotation.JTranscKeep;
+
+@JTranscKeep
 public class UnsatisfiedLinkError extends Error {
 
 	public UnsatisfiedLinkError() {

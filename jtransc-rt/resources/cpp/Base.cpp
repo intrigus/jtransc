@@ -4,6 +4,25 @@
 #include <windows.h>
 #endif
 
+#ifdef _WIN32
+	#define _JTRANSC_UNIX_LIKE_ 0
+    #define _JTRANSC_WINDOWS_ 1
+#elif __APPLE__
+    #define _JTRANSC_UNIX_LIKE_ 1
+    #define _JTRANSC_WINDOWS_ 0
+#elif __linux__
+    #define _JTRANSC_UNIX_LIKE_ 1
+    #define _JTRANSC_WINDOWS_ 0
+#elif __unix__ // all unices not caught above
+    #define _JTRANSC_UNIX_LIKE_ 1
+    #define _JTRANSC_WINDOWS_ 0
+#elif defined(_POSIX_VERSION)
+    #define _JTRANSC_UNIX_LIKE_ 1
+    #define _JTRANSC_WINDOWS_ 0
+#else
+#   error "Unknown compiler"
+#endif
+
 #include <memory>
 #include <vector>
 #include <string>
@@ -12,6 +31,12 @@
 #include <algorithm>
 #include <cmath>
 #include <csignal>
+#include "jni-headers/jni.h"
+
+#ifdef _JTRANSC_UNIX_LIKE_
+	#include <dlfcn.h>
+#endif
+
 //#include <chrono>
 //#include <thread>
 
@@ -80,6 +105,8 @@ typedef std::weak_ptr<java_lang_Object> WOBJ;
 
 #define GET_OBJECT(type, obj) (dynamic_cast<type*>(obj.get()))
 #define GET_OBJECT_NPE(type, obj) GET_OBJECT(type, N::ensureNpe(obj))
+#define jlong_to_ptr(a) ((void *)(uintptr_t)(a))
+#define ptr_to_jlong(a) ((jlong)(uintptr_t)(a))
 
 #ifdef DEBUG
 #define CHECK_NPE 1
@@ -182,6 +209,11 @@ struct N { public:
 
 	static double getTime();
 	static void startup();
+	static void* jtvmResolveNative(SOBJ, const char*, const char*, void**);
+	static void* jtvmResolveNativeMethodImpl(const char*, const char*, SOBJ, void**);
+	static void* jtvmFindDynamicSymbol(void*, const char*);
+	static void* jtvmLoadDynamicLibraray(const char*);
+	static void jtvmUnLoadDynamicLibraray(void*);
 
 	static void initStringPool();
 };
@@ -673,6 +705,121 @@ double N::getTime() {
 
 	return (double)(int64_t)ms.count();
 };
+
+void* N::jtvmResolveNative(SOBJ clazz, const char* shortMangledName, const char* longMangledName, void** ptr){
+	if(*ptr != NULL) {
+		return *ptr;
+	}
+	else {
+		auto classLoader = GET_OBJECT({% CLASS java.lang.Class %}, clazz)->{% METHOD java.lang.Class:getClassLoader %}();
+		std::cerr << "Before";
+		*ptr = jtvmResolveNativeMethodImpl(shortMangledName, longMangledName, classLoader, ptr);
+		std::cerr << "After";
+	}
+	if(*ptr == NULL){
+		//std::cerr << "Couldn't find native symbol err";
+		//auto k =  {% CONSTRUCTOR java.lang.NullPointerException:(Ljava/lang/String;)V %}(N::str(L"Couldn't find native symbol"));
+		//std::cerr << typeid(k).name() << "bbb\n";
+		//throw k;
+		//N::throwNpe();
+		throw "Couldn't find native symbol";
+	}
+	return *ptr;
+}
+
+void* N::jtvmResolveNativeMethodImpl(const char* shortMangledName, const char* longMangledName, SOBJ classLoader, void** ptr){
+	std::cerr << "Before 1";
+	auto castedClassLoader = GET_OBJECT({% CLASS java.lang.ClassLoader %}, classLoader);
+	std::cerr << "Before 2";
+	SOBJ nativeLibs = castedClassLoader->{% METHOD java.lang.ClassLoader:getNativeLibs %}();
+	std::cerr << "Before 3";
+	auto castedNativeLibs = GET_OBJECT({% CLASS java.util.ArrayList %}, nativeLibs);
+	std::cerr << "Before 4";
+	jint size = castedNativeLibs->{% METHOD java.util.ArrayList:size %}();
+	std::cerr << "Before 5";
+	for(jint i = 0; i < size; i++){
+		std::cerr << "Entered with" << size ;
+		auto castedNativeLib = GET_OBJECT({% CLASS java.lang.ClassLoader$NativeLib %}, castedNativeLibs->{% METHOD java.util.ArrayList:get %}(i));
+
+		auto handle = jlong_to_ptr(castedNativeLib->{% FIELD java.lang.ClassLoader$NativeLib:handle %});
+
+		void* symbol = N::jtvmFindDynamicSymbol(handle, shortMangledName);
+		if(symbol){
+			return symbol;
+		}
+		else {
+			symbol = N::jtvmFindDynamicSymbol(handle, longMangledName);
+			if(symbol) {
+				return symbol;
+			}
+			else {
+				return NULL;
+			}
+		}
+	}
+	std::cerr << "Before 6";
+	return NULL;
+}
+
+void* N::jtvmFindDynamicSymbol(void* handle, const char* symbolToSearch){
+#if _JTRANSC_WINDOWS_
+
+void* symbol = GetProcAddress(handle, symbolToSearch);
+
+//TODO error handling, etc.
+
+return symbol;
+
+#elif _JTRANSC_UNIX_LIKE_
+
+dlerror(); //Clear all old errors
+void* symbol = dlsym(handle, symbolToSearch);
+if(symbol){
+	return symbol;
+} else {
+	const char* error = dlerror();
+	if(error){
+		return NULL;
+		//throw error;
+	} else {
+		return NULL;
+		//throw (std::string("Unknown error while trying to resolve ") + std::string(symbolToSearch) + std::string(" or the symbol refers to a null pointer!")).c_str();
+	}
+}
+
+#else
+#   error "Dynamic loading unsupported on this target"
+#endif
+
+}
+
+void* N::jtvmLoadDynamicLibraray(const char* libraryName){
+#if _JTRANSC_WINDOWS_
+
+return LoadLibraray(libraryName);
+
+#elif _JTRANSC_UNIX_LIKE_
+
+return dlopen(libraryName, RTLD_LAZY | RTLD_LOCAL);
+
+#else
+#   error "Dynamic loading unsupported on this target"
+#endif
+}
+
+void N::jtvmUnLoadDynamicLibraray(void* handle){
+#if _JTRANSC_WINDOWS_
+
+FreeLibraray(handle);
+
+#elif _JTRANSC_UNIX_LIKE_
+
+dlclose(handle);
+
+#else
+#   error "Dynamic loading unsupported on this target"
+#endif
+}
 
 void SIGSEGV_handler(int signal) {
 	std::wcout << L"invalid memory access (segmentation fault)\n";

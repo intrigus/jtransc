@@ -92,13 +92,21 @@ public class Runtime {
 
 	public native void traceMethodCalls(boolean on);
 
-	native public void load(String filename);
+	public void load(String filename) {
+		load0(/*Reflection.getCallerClass()*/ null, filename);
+	}
 
-	native synchronized void load0(Class<?> fromClass, String filename);
+	synchronized void load0(Class<?> fromClass, String filename) {
+		ClassLoader.getSystemClassLoader().loadLibrary(null, filename, true);
+	}
 
-	native public void loadLibrary(String libname);
+	public void loadLibrary(String libname) {
+		loadLibrary0(/*Reflection.getCallerClass()*/ null, libname);
+	}
 
-	native synchronized void loadLibrary0(Class<?> fromClass, String libname);
+	synchronized void loadLibrary0(Class<?> fromClass, String libname) {
+		ClassLoader.getSystemClassLoader().loadLibrary(null, libname, false);
+	}
 
 	@Deprecated
 	public InputStream getLocalizedInputStream(InputStream in) {
