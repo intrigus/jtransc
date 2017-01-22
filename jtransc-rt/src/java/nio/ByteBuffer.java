@@ -18,6 +18,7 @@
 package java.nio;
 
 import com.jtransc.JTranscArrays;
+import com.jtransc.annotation.JTranscKeep;
 import libcore.io.Memory;
 
 import java.nio.internal.SizeOf;
@@ -32,16 +33,19 @@ public final class ByteBuffer extends Buffer implements Comparable<ByteBuffer> {
 	private final boolean isReadOnly;
 	private boolean isDirect;
 
+	@JTranscKeep
 	ByteBuffer(byte[] backingArray) {
 		this(backingArray.length, backingArray, 0, false);
 		this.isDirect = false;
 	}
 
+	@JTranscKeep
 	ByteBuffer(byte[] backingArray, boolean isDirect) {
 		this(backingArray.length, backingArray, 0, false);
 		this.isDirect = isDirect;
 	}
 
+	@JTranscKeep
 	private ByteBuffer(int capacity, byte[] backingArray, int arrayOffset, boolean isReadOnly) {
 		super(0, capacity, null);
 		this.backingArray = backingArray;

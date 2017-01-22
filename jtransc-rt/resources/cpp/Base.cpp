@@ -120,7 +120,14 @@ struct N;
 
 // Headers
 
+struct Env {
+	JNIEnv jni;
+	//
+};
+
 struct N { public:
+	static Env env;
+
 	static const int32_t MIN_INT32 = (int32_t)0x80000000;
 	static const int32_t MAX_INT32 = (int32_t)0x7FFFFFFF;
 
@@ -209,11 +216,27 @@ struct N { public:
 
 	static double getTime();
 	static void startup();
+
 	static void* jtvmResolveNative(SOBJ, const char*, const char*, void**);
 	static void* jtvmResolveNativeMethodImpl(const char*, const char*, SOBJ, void**);
 	static void* jtvmFindDynamicSymbol(void*, const char*);
 	static void* jtvmLoadDynamicLibraray(const char*);
 	static void jtvmUnLoadDynamicLibraray(void*);
+	static java_lang_Object* jtvmNewDirectByteBuffer(JNIEnv*, void*, jlong);
+	static void* jtvmGetDirectBufferAddress(JNIEnv*, SOBJ*);
+	//static jlong jtvmGetDirectBufferCapacity(JNIEnv*, void*);
+	static jsize jtvmGetArrayLength(JNIEnv*, jarray);
+
+	static JA_Z* jtvmNewBooleanArray(JNIEnv*, jsize);
+	static JA_B* jtvmNewByteArray(JNIEnv*, jsize);
+	static JA_C* jtvmNewCharArray(JNIEnv*, jsize);
+	static JA_S* jtvmNewShortArray(JNIEnv*, jsize);
+	static JA_I* jtvmNewIntArray(JNIEnv*, jsize);
+	static JA_J* jtvmNewLongArray(JNIEnv*, jsize);
+	static JA_F* jtvmNewFloatArray(JNIEnv*, jsize);
+	static JA_D* jtvmNewDoubleArray(JNIEnv*, jsize);
+	static JNIEnv* getJniEnv();
+	static void initEnv();
 
 	static void initStringPool();
 };
@@ -394,6 +417,8 @@ SOBJ JA_0::toDoubleArray() { return SOBJ(new JA_D((void *)getStartPtr(), bytesLe
 
 
 // N IMPLS
+
+Env N::env;
 
 SOBJ N::resolveClass(std::wstring str) {
 	return {% SMETHOD java.lang.Class:forName0 %}(N::str(str));
@@ -821,6 +846,418 @@ dlclose(handle);
 #endif
 }
 
+jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity){
+	std::cerr << "NewDirectByteBuffer\n";
+	//jobject bla = (jobject)N::jtvmNewDirectByteBuffer(env, address, capacity);
+	auto bla = (jobject)N::str("test");
+	std::cerr << "After\n";
+	return bla.get();
+}
+
+java_lang_Object* N::jtvmNewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity){
+	std::cerr << "N::jtvmNewDirectByteBuffer\n";
+	std::shared_ptr<JA_B> byteArray(new JA_B(address, capacity));
+	std::cerr << "Inside\n";
+	return ({% CONSTRUCTOR java.nio.ByteBuffer:([BZ)V %}(byteArray, (int8_t)true)).get();
+
+	/*auto byteArray = SOBJ(new JA_B(address, capacity));
+	std::cerr << "N::jtvmNewDirectByteBuffer after byte array";
+
+	//std::shared_ptr<JA_L> out(new JA_L(count, L"[java/lang/String;"));
+    //for (int n = 0; n < count; n++) out->set(n, N::str(std::wstring(strs[n])));
+    //return out.get()->sptr();
+	auto buffer = std::make_shared<{% CLASS java.nio.ByteBuffer %}>({% CONSTRUCTOR java.nio.ByteBuffer:([BZ)V %}(byteArray, (int8_t)true)).get()->sptr();
+	std::cerr << "N::jtvmNewDirectByteBuffer after alloc";
+	return buffer.get();*/
+	//return null;
+}
+
+void* GetDirectBufferAddress(JNIEnv* env, jobject buf){
+	return N::jtvmGetDirectBufferAddress(env, (SOBJ*)buf);
+}
+
+void* N::jtvmGetDirectBufferAddress(JNIEnv* env, SOBJ* buf){
+	auto buffer = GET_OBJECT({% CLASS java.nio.ByteBuffer %}, (*buf));
+	//TODO check that this is a direct buffer
+	return GET_OBJECT(JA_B, buffer->{% FIELD java.nio.ByteBuffer:backingArray %})->_data;
+}
+
+/*jlong GetDirectBufferCapacity(JNIEnv* env, jobject buf){
+	return N::jtvmGetDirectBufferCapacity(env, buf);
+}
+
+jlong N::jtvmGetDirectBufferCapacity(JNIEnv* env, void* buf){
+	auto buffer = GET_OBJECT({% CLASS java.nio.ByteBuffer %}, *buf);
+    return GET_OBJECT(JA_B, buffer->{% FIELD java.nio.ByteBuffer:backingArray %})->length;
+}*/
+
+jsize GetArrayLength(JNIEnv* env, jarray array){
+	return N::jtvmGetArrayLength(env, array);
+}
+
+jsize N::jtvmGetArrayLength(JNIEnv* env, jarray array){
+	return ((JA_0*)array)->length;
+}
+
+jbooleanArray NewBooleanArray(JNIEnv* env, jsize length){
+	return (jbooleanArray) N::jtvmNewBooleanArray(env, length);
+}
+
+JA_Z* N::jtvmNewBooleanArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_Z> out(new JA_Z(length));
+    return out.get();
+}
+
+jbyteArray NewByteArray(JNIEnv* env, jsize length){
+	return (jbyteArray) N::jtvmNewByteArray(env, length);
+}
+
+JA_B* N::jtvmNewByteArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_B> out(new JA_B(length));
+    return out.get();
+}
+
+jcharArray NewCharArray(JNIEnv* env, jsize length){
+	return (jcharArray) N::jtvmNewCharArray(env, length);
+}
+
+JA_C* N::jtvmNewCharArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_C> out(new JA_C(length));
+    return out.get();
+}
+
+jshortArray NewShortArray(JNIEnv* env, jsize length){
+	return (jshortArray) N::jtvmNewShortArray(env, length);
+}
+
+JA_S* N::jtvmNewShortArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_S> out(new JA_S(length));
+    return out.get();
+}
+
+jintArray NewIntArray(JNIEnv* env, jsize length){
+	return (jintArray) N::jtvmNewIntArray(env, length);
+}
+
+JA_I* N::jtvmNewIntArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_I> out(new JA_I(length));
+    return out.get();
+}
+
+jlongArray NewLongArray(JNIEnv* env, jsize length){
+	return (jlongArray) N::jtvmNewLongArray(env, length);
+}
+
+JA_J* N::jtvmNewLongArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_J> out(new JA_J(length));
+    return out.get();
+}
+
+jfloatArray NewFloatArray(JNIEnv* env, jsize length){
+	return (jfloatArray) N::jtvmNewFloatArray(env, length);
+}
+
+JA_F* N::jtvmNewFloatArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_F> out(new JA_F(length));
+    return out.get();
+}
+
+jdoubleArray NewDoubleArray(JNIEnv* env, jsize length){
+	return (jdoubleArray) N::jtvmNewDoubleArray(env, length);
+}
+
+JA_D* N::jtvmNewDoubleArray(JNIEnv* env, jsize length){
+	std::shared_ptr<JA_D> out(new JA_D(length));
+    return out.get();
+}
+
+JNIEnv* N::getJniEnv(){
+	return &N::env.jni;
+}
+
+jint GetVersion(JNIEnv* env){
+	return JNI_VERSION_1_6;
+}
+
+const struct JNINativeInterface_ jni = {
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	&GetVersion,
+
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	&GetArrayLength/*NULL*/,
+
+	NULL,
+	NULL,
+	NULL,
+
+	&NewBooleanArray,
+    &NewByteArray,
+    &NewCharArray,
+    &NewShortArray,
+    &NewIntArray,
+    &NewLongArray,
+    &NewFloatArray,
+    &NewDoubleArray,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+	NULL,
+
+	NULL,
+
+	&NewDirectByteBuffer,
+	&GetDirectBufferAddress,
+	NULL/*&GetDirectBufferCapacity*/,
+
+	NULL
+};
+
+void N::initEnv(){
+N::env.jni.functions = &jni;
+}
+
 void SIGSEGV_handler(int signal) {
 	std::wcout << L"invalid memory access (segmentation fault)\n";
 	throw L"invalid memory access (segmentation fault)";
@@ -839,6 +1276,7 @@ void SIGFPE_handler(int signal) {
 //SIGFPE	erroneous arithmetic operation such as divide by zero
 
 void N::startup() {
+	N::initEnv();
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 	std::signal(SIGSEGV, SIGSEGV_handler);

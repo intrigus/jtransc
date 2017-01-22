@@ -339,6 +339,7 @@ class CppGenerator(injector: Injector) : SingleFileCommonGenerator(injector) {
 			}
 			line("catch (...)") {
 				line("""std::wcout << L"ERROR unhandled unknown exception\n";""")
+				line("throw;");
 			}
 			line("return 0;")
 		}
@@ -567,19 +568,28 @@ class CppGenerator(injector: Injector) : SingleFileCommonGenerator(injector) {
 		else standardJniArgumentString += ", jobject"
 
 
-		line("std::cerr << \"STILL ALIVE HERE\\n\";");
 		line("typedef ${toNativeType(method.methodType.ret)} (JNICALL *func_ptr_t)(${standardJniArgumentString + nativeParameterString});")
 		line("static void* nativePointer = NULL;")
 		//{% CLASS ${method.containingClass.fqname} %}
 		line("func_ptr_t fptr = (func_ptr_t)N::jtvmResolveNative(N::resolveClass(L\"${method.containingClass.fqname}\"), \"${JniUtils.mangleShortJavaMethod(method)}\", \"${JniUtils.mangleLongJavaMethod(method)}\", &nativePointer);")
-		//line("func_ptr_t fptr = (func_ptr_t)dlsym(dlopen(\"/Users/simon/Documents/workspace_mars/jtransc/jtransc-main-run/example-gradle/HelloWorld.dylib\", RTLD_LAZY), \"${mangledJniFunctionName}\");")
-		line("std::cerr << \"STILL ALIVE HEREss\\n\";");
 
 		val sb2 = StringBuilder(30)
 		for (i in method.methodType.args.indices) {
-			sb2.append(", p${i}");
+			val arg = method.methodType.args[i].type;
+			if (arg is AstType.REF) {
+				sb2.append(", ((${referenceToNativeType(arg)})((SOBJ)");
+				sb2.append("p${i}");
+				sb2.append(").get())");
+			} else if (arg is AstType.ARRAY) {
+				sb2.append(", ((${arrayToNativeType(arg)})((SOBJ)");
+				sb2.append("p${i}");
+				sb2.append(").get())");
+			} else {
+				sb2.append(", p${i}");
+			}
+
 		}
-		line("return fptr(NULL, NULL ${sb2.toString()});")
+		line("return fptr(N::getJniEnv(), NULL ${sb2.toString()});")
 		//line("JNI: \"Empty BODY : ${method.containingClass.name}::${method.name}::${method.desc}\";")
 	}
 
@@ -603,15 +613,15 @@ class CppGenerator(injector: Injector) : SingleFileCommonGenerator(injector) {
 	private fun arrayToNativeType(type: AstType.ARRAY): String {
 		val arrayType = type.element
 		when (arrayType) {
-			is AstType.BOOL -> return "jbooleanarray"
-			is AstType.BYTE -> return "jbytearray"
-			is AstType.CHAR -> return "jchararray"
-			is AstType.SHORT -> return "jshortarray"
-			is AstType.INT -> return "jintarray"
-			is AstType.LONG -> return "jlongarray"
-			is AstType.FLOAT -> return "jfloatarray"
-			is AstType.DOUBLE -> return "jdoublearray"
-			else -> return "jobjectarray"
+			is AstType.BOOL -> return "jbooleanArray"
+			is AstType.BYTE -> return "jbyteArray"
+			is AstType.CHAR -> return "jcharArray"
+			is AstType.SHORT -> return "jshortArray"
+			is AstType.INT -> return "jintArray"
+			is AstType.LONG -> return "jlongArray"
+			is AstType.FLOAT -> return "jfloatArray"
+			is AstType.DOUBLE -> return "jdoubleArray"
+			else -> return "jobjectArray"
 		}
 	}
 

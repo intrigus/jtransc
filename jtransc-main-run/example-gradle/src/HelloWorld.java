@@ -7,10 +7,13 @@ public class HelloWorld {
 		System.out.println(dooFoo(1, 3));
 		System.out.println(dooFoo(2, 4));
 		System.out.println(dooFoo(3, 5));
+		System.out.println(dooFooo(new boolean[]{true, false, true, true}));
 		System.out.println(dooFoo(4, 6));
-		System.out.println(dooFoor(4, 6, 4, 4));
+		//System.out.println(dooFoor(4, 6, 4, 4));
 
 	}
+
+	public static native int dooFooo(boolean[] t);
 
 	public static native int dooFoo(int t, int m);
 	/*
